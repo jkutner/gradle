@@ -31,6 +31,7 @@ import org.gradle.api.internal.tasks.TaskValidationContext;
 import org.gradle.api.tasks.FileNormalizer;
 import org.gradle.api.tasks.TaskExecutionException;
 import org.gradle.internal.Factory;
+import org.gradle.internal.UncheckedException;
 import org.gradle.internal.file.PathToFileResolver;
 
 import java.util.ArrayList;
@@ -71,6 +72,37 @@ public class DefaultUnitOfWorkProperties implements UnitOfWorkProperties {
             ));
         } catch (Exception e) {
             throw new TaskExecutionException(task, e);
+        }
+
+        return new DefaultUnitOfWorkProperties(
+            task.toString(),
+            inputPropertiesVisitor.getPropertyValuesFactory(),
+            inputFilesVisitor.getFileProperties(),
+            outputFilesVisitor.getFileProperties(),
+            outputFilesVisitor.hasDeclaredOutputs(),
+            localStateVisitor.getFiles(),
+            destroyablesVisitor.getFiles(),
+            validationVisitor.getTaskPropertySpecs());
+    }
+
+    public static UnitOfWorkProperties resolve(PropertyWalker propertyWalker, FileResolver resolver, String beanName, Object task) {
+        GetInputFilesVisitor inputFilesVisitor = new GetInputFilesVisitor(beanName, resolver);
+        GetOutputFilesVisitor outputFilesVisitor = new GetOutputFilesVisitor(beanName, resolver);
+        GetInputPropertiesVisitor inputPropertiesVisitor = new GetInputPropertiesVisitor(beanName);
+        GetLocalStateVisitor localStateVisitor = new GetLocalStateVisitor(beanName, resolver);
+        GetDestroyablesVisitor destroyablesVisitor = new GetDestroyablesVisitor(beanName, resolver);
+        ValidationVisitor validationVisitor = new ValidationVisitor();
+        try {
+            propertyWalker.visitProperties( new CompositePropertyVisitor(
+                inputPropertiesVisitor,
+                inputFilesVisitor,
+                outputFilesVisitor,
+                validationVisitor,
+                destroyablesVisitor,
+                localStateVisitor
+            ), task, resolver);
+        } catch (Exception e) {
+            throw UncheckedException.throwAsUncheckedException(e);
         }
 
         return new DefaultUnitOfWorkProperties(
